@@ -28,7 +28,7 @@ test('standalone identity and home link use the new root domain with no reverse 
   assert.equal(attr(nodes.find(node => node.tagName === 'link' && attr(node, 'rel') === 'canonical'), 'href'),
     'https://ucsdcannonball.com/');
   assert.equal(attr(nodes.find(node => attr(node, 'aria-label') === 'Cannonball home'), 'href'), '/');
-  for (const file of ['index.html', 'app.mjs', 'standings.mjs', 'cannonball.css']) {
+  for (const file of ['index.html', 'app.mjs', 'standings.mjs', 'share.mjs', 'cannonball.css']) {
     const content = await readFile(new URL(file, root), 'utf8');
     assert.doesNotMatch(content, /boomerrawlings\.com|(?:href|src)=["']\/cannonball\//i);
   }
@@ -51,7 +51,7 @@ test('HTML, responsive images, fonts, styles, and module imports resolve at the 
   for (const match of css.matchAll(/url\(["']?([^)'"\s]+)["']?\)/g)) {
     await assertLocalFile(match[1], new URL('cannonball.css', root));
   }
-  for (const file of ['app.mjs', 'standings.mjs']) {
+  for (const file of ['app.mjs', 'standings.mjs', 'share.mjs']) {
     const code = await readFile(new URL(file, root), 'utf8');
     for (const match of code.matchAll(/\bfrom\s+["']([^"']+)["']/g)) {
       await assertLocalFile(match[1], new URL(file, root));
@@ -75,4 +75,31 @@ test('leaderboard explains the straight-line average beside the existing elapsed
   const recordSpeed = nodes.find(node => attr(node, 'id') === 'record-speed');
   assert.ok(recordSpeed);
   assert.notEqual(attr(recordSpeed, 'hidden'), undefined, 'no speed appears before a verified record loads');
+});
+
+test('social previews use the canonical identity and an opaque image with matching dimensions', async () => {
+  const meta = name => attr(nodes.find(node => node.tagName === 'meta' && (attr(node, 'property') === name || attr(node, 'name') === name)), 'content');
+  const title = nodes.find(node => node.tagName === 'title');
+  assert.equal(title.childNodes[0].value, 'UCSD CANNONBALL');
+  assert.equal(meta('og:title'), 'UCSD CANNONBALL');
+  assert.equal(meta('twitter:title'), meta('og:title'));
+  assert.equal(meta('og:url'), 'https://ucsdcannonball.com/');
+  assert.equal(meta('og:type'), 'website');
+  assert.equal(meta('twitter:card'), 'summary_large_image');
+  const image = new URL(meta('og:image'));
+  assert.equal(image.origin, 'https://ucsdcannonball.com');
+  assert.match(image.pathname, /^\/assets\/social-preview-v\d+\.png$/);
+  assert.equal(meta('twitter:image'), image.href);
+  assert.equal(meta('og:image:type'), 'image/png');
+  assert.match(meta('og:image:alt'), /UCSD CANNONBALL.*POINT A POINT B NO RULES/);
+  assert.equal(meta('twitter:image:alt'), meta('og:image:alt'));
+  const png = await readFile(new URL(image.pathname.slice(1), root));
+  assert.deepEqual([...png.subarray(0,8)], [137,80,78,71,13,10,26,10]);
+  assert.equal(png.toString('ascii',12,16), 'IHDR');
+  assert.equal(png.readUInt32BE(16), Number(meta('og:image:width')));
+  assert.equal(png.readUInt32BE(20), Number(meta('og:image:height')));
+  assert.equal(png.readUInt32BE(16), 1200);
+  assert.equal(png.readUInt32BE(20), 630);
+  assert.equal(png[25], 2, 'RGB PNG uses an opaque background');
+  assert.ok(png.length < 1000000, 'the preview stays small enough to fetch quickly');
 });

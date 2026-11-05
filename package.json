@@ -3,10 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": {"node": ">=24"},
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
-    "test": "node --test scripts/test-cannonball.mjs scripts/test-site.mjs",
+    "test": "node --test scripts/test-cannonball.mjs scripts/test-site.mjs scripts/test-share.mjs",
     "build": "npm test && node scripts/build.mjs"
   },
-  "devDependencies": {"parse5": "7.3.0"}
+  "devDependencies": {
+    "parse5": "7.3.0"
+  }
 }

@@ -9,9 +9,25 @@
   <meta name="theme-color" content="#101f34">
   <meta name="description" content="The independent UCSD Cannonball campus time trial. See verified runs from North Point to Gilman Gateway, read the rules, and submit a time.">
   <link rel="canonical" href="https://ucsdcannonball.com/">
-  <title>UCSD Cannonball — Campus Time Trial</title>
-  <link rel="stylesheet" href="./cannonball.css?v=course-4">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="UCSD CANNONBALL">
+  <meta property="og:title" content="UCSD CANNONBALL">
+  <meta property="og:description" content="POINT A POINT B NO RULES. An independent campus time trial.">
+  <meta property="og:url" content="https://ucsdcannonball.com/">
+  <meta property="og:image" content="https://ucsdcannonball.com/assets/social-preview-v1.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="UCSD CANNONBALL in cream and gold on navy. POINT A POINT B NO RULES.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="UCSD CANNONBALL">
+  <meta name="twitter:description" content="POINT A POINT B NO RULES. An independent campus time trial.">
+  <meta name="twitter:image" content="https://ucsdcannonball.com/assets/social-preview-v1.png">
+  <meta name="twitter:image:alt" content="UCSD CANNONBALL in cream and gold on navy. POINT A POINT B NO RULES.">
+  <title>UCSD CANNONBALL</title>
+  <link rel="stylesheet" href="./cannonball.css?v=course-5">
   <script type="module" src="./app.mjs"></script>
+  <script type="module" src="./share.mjs"></script>
 </head>
 <body>
   <header class="mast shell">
@@ -97,7 +113,17 @@
       <article class="history"><div><p class="eyebrow muted">Where it started</p><h2>The original Cannonball</h2></div><div><p>In November 1971, the Cannonball field set off from a Manhattan parking garage for the Portofino Inn in Redondo Beach. Brock Yates and Dan Gurney made it in 35 hours and 54 minutes.</p><p>Ours starts under an arch and ends between a row of bollards. Part of the fun is comparing times with someone who took a completely different way across campus. Know a friend who could beat the record? Send them the time.</p><a class="inline-link" href="https://www.caranddriver.com/features/columns/a15143608/the-cannonball-baker-sea-to-shining-sea-memorial-trophy-dash-archived-feature/">Brock Yates’s account in Car and Driver <span aria-hidden="true">↗</span></a></div></article>
     </section>
   </main>
-  <footer class="page-foot shell"><span>Independent campus time trial</span><span>La Jolla, California</span></footer>
+  <footer class="page-foot shell"><span>Independent campus time trial</span><button id="invite-open" class="invite-open" type="button" aria-haspopup="dialog" aria-controls="invite-dialog" hidden>Invite your fastest friends <span aria-hidden="true">↗</span></button><span>La Jolla, California</span></footer>
+  <dialog id="invite-dialog" class="invite-dialog" aria-labelledby="invite-title" aria-describedby="invite-description">
+    <div class="invite-head"><p class="eyebrow accent">Pass it on</p><button id="invite-close" class="text-button" type="button" aria-label="Close invite options">Close</button></div>
+    <h2 id="invite-title">Invite your fastest friends</h2>
+    <p id="invite-description">Send the course to someone who could beat the clock.</p>
+    <div class="invite-actions"><button id="invite-native" class="action" type="button" hidden>Share to an app</button><button id="invite-copy" class="action invite-copy" type="button">Copy link</button></div>
+    <label class="invite-url-label" for="invite-url">Course link</label><input id="invite-url" type="text" readonly value="https://ucsdcannonball.com/" spellcheck="false">
+    <p id="invite-status" class="invite-status" role="status" aria-live="polite" aria-atomic="true"></p>
+    <p class="invite-hint">Text it, post it, or paste the link into your favorite app.</p>
+    <div class="invite-links" aria-label="Share options"><a id="invite-whatsapp" href="https://wa.me/" target="_blank" rel="noopener noreferrer">WhatsApp</a><a id="invite-x" href="https://twitter.com/intent/tweet" target="_blank" rel="noopener noreferrer">X</a><a id="invite-email" href="mailto:">Email</a></div>
+  </dialog>
   <div id="wipe" aria-hidden="true"></div>
 </body>
 </html>
