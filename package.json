@@ -1,0 +1,12 @@
+{
+  "name": "ucsdcannonball.com",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=24"},
+  "scripts": {
+    "test": "node --test scripts/test-cannonball.mjs scripts/test-site.mjs",
+    "build": "npm test && node scripts/build.mjs"
+  },
+  "devDependencies": {"parse5": "7.3.0"}
+}
