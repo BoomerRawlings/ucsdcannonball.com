@@ -84,6 +84,11 @@ export function readFormUrl(rows) {
   return null;
 }
 
+export function formEmbedUrl(url) {
+  const safe=readFormUrl([['FormURL',url]]);
+  return safe && new URL(safe).hostname==='docs.google.com' ? safe+'?embedded=true' : null;
+}
+
 export async function loadSheet(tab) {
   const columns = tab==='Standings'?'A,B,C,D':tab==='Config'?'A,B':null;
   if (!columns) throw new Error('Unknown public tab');

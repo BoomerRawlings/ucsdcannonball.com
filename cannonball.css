@@ -142,3 +142,8 @@ tbody th[scope='row']{font:600 1rem/1.35 var(--body);text-transform:none;letter-
 #invite-url:focus-visible{outline:3px solid var(--aqua);outline-offset:3px}
 .invite-status{min-height:1.5em;margin:9px 0 14px}.invite-links{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:9px}.invite-links a{display:inline-flex;align-items:center;min-height:44px;color:var(--gold);font:600 .96rem var(--panel)}
 @media(max-width:700px){.page-foot{grid-template-columns:1fr 1fr;gap:5px 12px}.invite-open{grid-column:1/-1;grid-row:1}.page-foot>span{grid-row:2}.invite-dialog{padding:18px}.invite-actions .action{padding-inline:12px}}
+
+.embedded-entry{margin-top:32px;padding-top:4px;border-top:1px solid var(--line)}
+.embedded-entry .section-line{margin-top:18px}.embed-note{color:var(--muted);font-size:.94rem;line-height:1.6;max-width:78ch;margin-bottom:10px}
+#form-embed{display:block;width:100%;height:1050px;border:1px solid var(--line);margin-top:18px;background:var(--paper);color-scheme:light}
+@media(max-width:700px){#form-embed{height:1150px}.embedded-entry{margin-top:24px}}

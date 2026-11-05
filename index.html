@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://docs.google.com https://*.googleusercontent.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://docs.google.com https://*.googleusercontent.com; frame-src https://docs.google.com; object-src 'none'; base-uri 'none'; form-action 'none'">
   <link rel="icon" href="./assets/mark.svg" type="image/svg+xml">
   <meta name="theme-color" content="#101f34">
   <meta name="description" content="The independent UCSD Cannonball campus time trial. See verified runs from North Point to Gilman Gateway, read the rules, and submit a time.">
@@ -91,7 +91,13 @@
           <li><strong>Send in your time.</strong><p>Enter your handle, elapsed time, and the date and time you finished in San Diego. If you used motor power at any point, pick Motorized. Otherwise, pick Human-powered.</p></li>
         </ol>
         <a class="inline-link" href="#about">See course coordinates and rules <span aria-hidden="true">→</span></a>
-      </article><aside class="paper-panel"><p class="eyebrow">Submission privacy</p><h2>Who sees my route?</h2><p>Send a GPS link the reviewer can open. Your route and optional notes stay private here. The board shows your handle, division, elapsed time, straight-line average speed, and when you finished.</p><p>Keep the link working until your time is verified. Then you can delete the GPS recording or turn off link sharing.</p><div class="form-area"><p id="form-state" role="status">Checking submission availability…</p><button id="form-retry" type="button" class="text-button" hidden>Check again <span aria-hidden="true">↻</span></button><a id="form-link" class="action" hidden>Continue to Google Form <span aria-hidden="true">↗</span></a></div></aside></div>
+      </article><aside class="paper-panel"><p class="eyebrow">Submission privacy</p><h2>Who sees my route?</h2><p>Send a GPS link the reviewer can open. Your route and optional notes stay private here. The board shows your handle, division, elapsed time, straight-line average speed, and when you finished.</p><p>Keep the link working until your time is verified. Then you can delete the GPS recording or turn off link sharing.</p><div class="form-area"><p id="form-state" role="status">Checking submission availability…</p><button id="form-retry" type="button" class="text-button" hidden>Check again <span aria-hidden="true">↻</span></button><a id="form-link" class="action" target="_blank" rel="noopener noreferrer" hidden>Open Google Form in a new tab <span aria-hidden="true">↗</span></a></div></aside></div>
+      <section id="embedded-entry" class="embedded-entry" aria-labelledby="entry-heading" hidden>
+        <div class="section-line"><h2 id="entry-heading">Submit your run</h2></div>
+        <p class="embed-note">No sign-in required. If Google shows an account below, it is your signed-in account and is not included in your response. Runs appear on the board only after verification.</p>
+        <p class="embed-note">If the form does not load, use the Google Form link above. Wait for Google's confirmation after submitting.</p>
+        <iframe id="form-embed" title="UCSD Cannonball run submission form" loading="lazy" referrerpolicy="no-referrer"></iframe>
+      </section>
     </section>
 
     <section id="about" class="view" aria-labelledby="about-heading" hidden>

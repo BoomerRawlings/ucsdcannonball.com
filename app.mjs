@@ -1,4 +1,4 @@
-import {divisions, ranked, overallFastest, readStandings, loadSheet, formatTime, formatSpeed, pacificStamp, readFormUrl} from './standings.mjs';
+import {divisions, ranked, overallFastest, readStandings, loadSheet, formatTime, formatSpeed, pacificStamp, readFormUrl, formEmbedUrl} from './standings.mjs';
 
 const $=id=>document.getElementById(id);
 const tabs=[...document.querySelectorAll('[data-division]')];
@@ -146,13 +146,16 @@ async function getRuns(){
 $('retry')?.addEventListener('click',getRuns);
 
 async function getForm(){
-  if(readingForm)return;
+  if(readingForm||formReady)return;
   readingForm=true;
+  hidden($('embedded-entry'),true);
   const link=$('form-link');hidden(link,true);link.removeAttribute('href');link.setAttribute('aria-disabled','true');
   say('form-state','Checking entry availability…');
   try{
     const url=readFormUrl(await loadSheet('Config'));
     if(!url){say('form-state','Submissions have not opened yet.');return;}
+    const embedUrl=formEmbedUrl(url), frame=$('form-embed');
+    if(embedUrl&&frame){frame.src=embedUrl;hidden($('embedded-entry'),false);}
     link.href=url;link.removeAttribute('aria-disabled');hidden(link,false);formReady=true;say('form-state','No sign-in required.');
   }catch{say('form-state','The submission form is currently unavailable. Please check back.');}
   finally{readingForm=false;hidden($('form-retry'),formReady);}

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { parse } from 'parse5';
-import { formatSpeed, formatTime, loadSheet, overallFastest, pacificStamp, parseCsv, ranked, readFormUrl, readStandings, straightLineMph } from '../standings.mjs';
+import { formEmbedUrl, formatSpeed, formatTime, loadSheet, overallFastest, pacificStamp, parseCsv, ranked, readFormUrl, readStandings, straightLineMph } from '../standings.mjs';
 
 const standingsHeader = ['Handle', 'Division', 'Elapsed seconds', 'Completed at'];
 const runRows = [
@@ -143,19 +143,37 @@ test('submission handoff uses a responder URL from the designated config row', (
   assert.ok(!readFormUrl([['Key', 'Value'], ['OtherKey', form]]));
 });
 
+test('only trusted Google respondent URLs can become embeds, without inherited query parameters', () => {
+  const form='https://docs.google.com/forms/d/e/example/viewform';
+  assert.equal(formEmbedUrl(form), form+'?embedded=true');
+  assert.equal(formEmbedUrl(form+'?usp=sharing&entry.123=private#fragment'), form+'?embedded=true');
+  for(const url of [null, '', 'https://forms.gle/example', 'javascript:alert(1)',
+    'https://docs.google.com.evil.example/forms/d/e/example/viewform',
+    'https://user:password@docs.google.com/forms/d/e/example/viewform',
+    'https://docs.google.com:444/forms/d/e/example/viewform',
+    'http://docs.google.com/forms/d/e/example/viewform',
+    'https://docs.google.com/forms/d/example/edit']) {
+    assert.equal(formEmbedUrl(url), null, String(url));
+  }
+});
+
 let appLoadCount = 0;
 async function mountApp(t, respond) {
   class Element extends EventTarget {
     attrs = new Map();
     children = [];
     ownText = '';
+    srcAssignments = 0;
+    get src() { return this.getAttribute('src') || ''; }
+    set src(value) { this.setAttribute('src', value); }
     classList = {toggle() {}};
     dataset = {};
     get textContent() { return this.ownText + this.children.map(child => child.textContent).join(''); }
     set textContent(value) { this.ownText = String(value); this.children = []; }
     append(...children) { this.children.push(...children); }
     replaceChildren(...children) { this.ownText = ''; this.children = children; }
-    setAttribute(name, value) { this.attrs.set(name, value); }
+    getAttribute(name) { return this.attrs.get(name) ?? null; }
+    setAttribute(name, value) { this.attrs.set(name, String(value)); if(name === 'src') this.srcAssignments++; }
     removeAttribute(name) { this.attrs.delete(name); }
     querySelector() { return null; }
   }
@@ -164,6 +182,7 @@ async function mountApp(t, respond) {
   function mount(node) {
     const element = new Element(), id = attribute(node, 'id'), division = attribute(node, 'data-division');
     element.hidden = attribute(node, 'hidden') !== undefined;
+    for(const {name, value} of node.attrs || []) element.attrs.set(name, value);
     if (node.value) element.textContent = node.value;
     if (id) byId.set(id, element);
     if (division) { element.dataset.division = division; tabs.push(element); }
@@ -197,6 +216,8 @@ test('acceptance loads verified speeds, divisions preserve ranking, and only Sub
     ? [['Key', 'Value'], ['FormURL', form]] : [standingsHeader, ...runRows]));
   assert.deepEqual(requests, []);
   assert.equal(get('app').hidden, true);
+  assert.equal(get('form-embed').getAttribute('src'), null);
+  assert.equal(get('embedded-entry').hidden, true);
   get('enter').dispatchEvent(new Event('click'));
   assert.match(get('standings-state').textContent, /^Loading verified runs/);
   assert.equal(get('record-speed').hidden, true);
@@ -224,6 +245,7 @@ test('acceptance loads verified speeds, divisions preserve ranking, and only Sub
   assert.deepEqual(requests, ['Standings']);
   assert.doesNotMatch(get('opening-post').textContent, /mph|straight.line/i, 'unverified opening time has no speed');
 
+  assert.equal(get('form-embed').getAttribute('src'), null, 'the form stays unloaded before Submit');
   location.hash = '#submit';
   window.dispatchEvent(new Event('hashchange'));
   await settle();
@@ -231,6 +253,18 @@ test('acceptance loads verified speeds, divisions preserve ranking, and only Sub
   assert.equal(get('submit').hidden, false);
   assert.equal(get('form-link').hidden, false);
   assert.equal(get('form-link').href, form);
+  const iframe=get('form-embed');
+  assert.equal(iframe.src, form+'?embedded=true');
+  assert.equal(iframe.srcAssignments, 1);
+  assert.equal(get('embedded-entry').hidden, false);
+  for(const view of ['about', 'submit']) {
+    location.hash='#'+view;
+    window.dispatchEvent(new Event('hashchange'));
+    await settle();
+  }
+  assert.deepEqual(requests, ['Standings', 'Config']);
+  assert.equal(get('form-embed'), iframe, 'navigation retains the same embedded form and its draft');
+  assert.equal(iframe.srcAssignments, 1, 'navigation must not reload the iframe');
 });
 
 test('an empty approved board keeps the empty state and does not infer speed from the pending opening time', async t => {
@@ -274,4 +308,107 @@ test('load failure and retry retain their states and show speed only after appro
   assert.equal(get('retry').hidden, true);
   assert.equal(get('standings-state').hidden, true);
   assert.deepEqual(get('standings-body').children.map(row => row.children[1].textContent), ['@glider']);
+});
+
+test('a short Google Form URL keeps the external fallback without attempting an embed', async t => {
+  const form='https://forms.gle/example';
+  const {get}=await mountApp(t, tab => csvResponse(tab==='Config'
+    ? [['Key','Value'],['FormURL',form]] : [standingsHeader]));
+  location.hash='#submit';
+  get('enter').dispatchEvent(new Event('click'));
+  await settle();
+  assert.equal(get('form-link').href, form);
+  assert.equal(get('form-link').hidden, false);
+  assert.equal(get('form-embed').getAttribute('src'), null);
+  assert.equal(get('form-embed').srcAssignments, 0);
+  assert.equal(get('embedded-entry').hidden, true);
+  assert.equal(get('form-retry').hidden, true);
+  assert.equal(get('form-state').textContent, 'No sign-in required.');
+});
+
+test('missing, malicious, and failed form configuration keep the existing retryable states without loading an iframe', async t => {
+  for(const [name, response, status] of [
+    ['missing', () => csvResponse([['Key','Value']]), 'Submissions have not opened yet.'],
+    ['unsafe', () => csvResponse([['Key','Value'],['FormURL','https://docs.google.com.evil.example/forms/d/e/example/viewform']]), 'Submissions have not opened yet.'],
+    ['failed', () => new Response('Unavailable',{status:503}), 'The submission form is currently unavailable. Please check back.'],
+  ]) await t.test(name, async t => {
+    const {get}=await mountApp(t, tab => tab==='Config' ? response() : csvResponse([standingsHeader]));
+    location.hash='#submit';
+    get('enter').dispatchEvent(new Event('click'));
+    await settle();
+    assert.equal(get('form-state').textContent, status);
+    assert.equal(get('form-link').hidden, true);
+    assert.equal(get('form-link').getAttribute('href'), null);
+    assert.equal(get('form-embed').getAttribute('src'), null);
+    assert.equal(get('form-embed').srcAssignments, 0);
+    assert.equal(get('embedded-entry').hidden, true);
+    assert.equal(get('form-retry').hidden, false);
+  });
+});
+
+test('delayed form configuration is deduplicated across navigation and never returns visitors to Submit', async t => {
+  const form='https://docs.google.com/forms/d/e/example/viewform';
+  let finishConfig;
+  const {get, window, requests}=await mountApp(t, tab => tab==='Config'
+    ? new Promise(resolve => { finishConfig=resolve; }) : csvResponse([standingsHeader]));
+  const iframe=get('form-embed');
+  location.hash='#submit';
+  get('enter').dispatchEvent(new Event('click'));
+  assert.match(get('form-state').textContent, /Checking entry availability/);
+  assert.equal(get('form-link').hidden, true);
+  assert.equal(iframe.srcAssignments, 0);
+  for(const view of ['about', 'submit', 'about']) {
+    location.hash='#'+view;
+    window.dispatchEvent(new Event('hashchange'));
+  }
+  get('form-retry').dispatchEvent(new Event('click'));
+  assert.deepEqual(requests, ['Config', 'Standings']);
+  assert.equal(get('about').hidden, false);
+  assert.equal(get('submit').hidden, true);
+  finishConfig(csvResponse([['Key','Value'],['FormURL',form]]));
+  await settle();
+  assert.equal(location.hash, '#about');
+  assert.equal(get('about').hidden, false, 'finishing the Config request must not change the active page');
+  assert.equal(get('submit').hidden, true);
+  assert.equal(iframe.src, form+'?embedded=true');
+  assert.equal(iframe.srcAssignments, 1);
+  location.hash='#submit';
+  window.dispatchEvent(new Event('hashchange'));
+  get('form-retry').dispatchEvent(new Event('click'));
+  await settle();
+  assert.equal(get('submit').hidden, false);
+  assert.equal(get('form-embed'), iframe);
+  assert.equal(iframe.srcAssignments, 1, 'returning or an extra retry must preserve the iframe draft');
+  assert.deepEqual(requests, ['Config', 'Standings']);
+});
+
+test('a failed Config request can retry successfully without duplicate reads or iframe resets', async t => {
+  const form='https://docs.google.com/forms/d/e/example/viewform';
+  let finishConfig;
+  const {get, requests}=await mountApp(t, tab => tab==='Config'
+    ? new Promise(resolve => { finishConfig=resolve; }) : csvResponse([standingsHeader]));
+  location.hash='#submit';
+  get('enter').dispatchEvent(new Event('click'));
+  finishConfig(new Response('Unavailable',{status:503}));
+  await settle();
+  assert.equal(get('form-retry').hidden, false);
+  assert.match(get('form-state').textContent, /currently unavailable/);
+  assert.equal(get('form-link').hidden, true);
+  assert.equal(get('form-embed').srcAssignments, 0);
+  get('form-retry').dispatchEvent(new Event('click'));
+  get('form-retry').dispatchEvent(new Event('click'));
+  assert.deepEqual(requests, ['Config', 'Standings', 'Config']);
+  assert.match(get('form-state').textContent, /Checking entry availability/);
+  assert.equal(get('embedded-entry').hidden, true);
+  finishConfig(csvResponse([['Key','Value'],['FormURL',form]]));
+  await settle();
+  assert.equal(get('form-link').hidden, false);
+  assert.equal(get('form-link').href, form);
+  assert.equal(get('embedded-entry').hidden, false);
+  assert.equal(get('form-embed').srcAssignments, 1);
+  assert.equal(get('form-retry').hidden, true);
+  get('form-retry').dispatchEvent(new Event('click'));
+  await settle();
+  assert.deepEqual(requests, ['Config', 'Standings', 'Config']);
+  assert.equal(get('form-embed').srcAssignments, 1);
 });

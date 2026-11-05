@@ -103,3 +103,32 @@ test('social previews use the canonical identity and an opaque image with matchi
   assert.equal(png[25], 2, 'RGB PNG uses an opaque background');
   assert.ok(png.length < 1000000, 'the preview stays small enough to fetch quickly');
 });
+
+test('the embedded respondent form stays unloaded initially and keeps an accessible external fallback', () => {
+  const byId=id=>nodes.find(node=>attr(node,'id')===id);
+  const frame=byId('form-embed'), section=byId('embedded-entry'), fallback=byId('form-link');
+  assert.equal(frame.tagName, 'iframe');
+  assert.equal(attr(frame,'src'), undefined);
+  assert.equal(attr(frame,'srcdoc'), undefined);
+  assert.match(attr(frame,'title'), /Cannonball.*submission form/i);
+  assert.equal(attr(frame,'loading'), 'lazy');
+  assert.equal(attr(frame,'referrerpolicy'), 'no-referrer');
+  assert.notEqual(attr(frame,'tabindex'), '-1', 'keyboard users can enter the embedded form');
+  assert.equal(frame.parentNode, section);
+  assert.equal(section.parentNode, byId('submit'));
+  assert.equal(attr(section,'aria-labelledby'), 'entry-heading');
+  assert.ok(byId('entry-heading'));
+  assert.notEqual(attr(section,'hidden'), undefined);
+  assert.equal(attr(fallback,'target'), '_blank');
+  assert.match(attr(fallback,'rel'), /noopener/);
+  assert.match(attr(fallback,'rel'), /noreferrer/);
+  const text=node=>(node.value || '')+(node.childNodes || []).map(text).join('');
+  assert.match(text(section), /If the form does not load/);
+  assert.match(text(section), /Google's confirmation/);
+  const csp=attr(nodes.find(node=>node.tagName==='meta' && attr(node,'http-equiv')==='Content-Security-Policy'),'content');
+  const directives=new Map(csp.split(';').map(value=>value.trim().split(/\s+/)).filter(parts=>parts[0]).map(([name,...values])=>[name,values]));
+  assert.deepEqual(directives.get('frame-src'), ['https://docs.google.com']);
+  assert.deepEqual(directives.get('script-src'), ["'self'"]);
+  assert.deepEqual(directives.get('form-action'), ["'none'"]);
+  assert.deepEqual(directives.get('object-src'), ["'none'"]);
+});
