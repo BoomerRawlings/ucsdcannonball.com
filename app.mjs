@@ -88,6 +88,16 @@ for(const [index,tab] of tabs.entries()){
   });
 }
 
+function verificationBadge(element, value) {
+  element.replaceChildren();
+  hidden(element,!value);
+  element.className='verification'+(value==='Verified'?' is-verified':'');
+  if(!value)return;
+  if(value==='Verified'){
+    const check=document.createElement('span');check.textContent='✓';check.setAttribute('aria-hidden','true');element.append(check);
+  }
+  const label=document.createElement('span');label.textContent=value;element.append(label);
+}
 function renderBoard(){
   const board=ranked(rows,selected);
   const leader=board[0];
@@ -98,6 +108,7 @@ function renderBoard(){
   say('record-label',selected+' course record');
   say('record-time',leader?formatTime(leader.seconds):'—:—.——');
   say('record-handle',leader?leader.handle:feed==='error'?'Live times unavailable':feed==='loading'?'Checking the board…':'First record unclaimed');
+  verificationBadge($('record-verification'),leader?.verification || '');
   const stamp=leader?pacificStamp(leader.completed):{date:'',time:''};
   if($('record-date')&&$('record-clock')){say('record-date',stamp.date);say('record-clock',stamp.time);}
   else say('record-completed',leader?stamp.date+' · '+stamp.time:'');
@@ -112,7 +123,10 @@ function renderBoard(){
     for(const [j,content] of [String(rank).padStart(2,'0'),run.handle,formatTime(run.seconds),stamp.date+' · '+stamp.time].entries()){
       const cell=document.createElement(j===1?'th':'td');
       if(j===1)cell.scope='row';
-      if(j===2){
+      if(j===1){
+        const handle=document.createElement('span');handle.textContent=content;cell.append(handle);
+        if(run.verification){const badge=document.createElement('span');verificationBadge(badge,run.verification);cell.append(badge);}
+      }else if(j===2){
         const elapsed=document.createElement('span'), speed=document.createElement('span');
         elapsed.textContent=content;speed.textContent=formatSpeed(run.seconds);speed.className='run-speed';
         cell.append(elapsed);cell.append(speed);
@@ -122,28 +136,28 @@ function renderBoard(){
     body.append(tr);
   }
   const status=feed==='error'?(lastSuccess?'Showing the last loaded results. The live sheet is unavailable.':'The live results sheet is unavailable. Check back or retry.')
-    :feed==='loading'?'Loading verified runs…':board.length?'':'No verified '+selected.toLowerCase()+' finishes yet.';
+    :feed==='loading'?'Loading runs…':board.length?'':'No '+selected.toLowerCase()+' finishes yet.';
   say('standings-state',status);hidden($('standings-state'),!status);hidden($('retry'),feed!=='error');
   hidden($('public-sheet'),!lastSuccess);
-  const openingHandle=$('opening-handle')?.textContent?.trim().toLowerCase();
-  const opening=$('opening-post');
-  const showOpeningFirst=Boolean(opening)&&!rows.length&&!picked;
-  hidden($('verified-record'),showOpeningFirst);
-  opening?.classList.toggle('is-leading',showOpeningFirst);
-  hidden(opening,rows.some(run=>run.handle.toLowerCase()===openingHandle));
+  $('refresh-standings').disabled=feed==='loading';
+  say('refresh-standings',feed==='loading'?'Refreshing…':'Refresh standings');
 }
-async function getRuns(){
+async function getRuns(preserveDivision=false){
   if(feed==='loading')return;
   feed='loading';renderBoard();
   try{
     const next=readStandings(await loadSheet('Standings'));
     rows=next;lastSuccess=true;
-    const overall=overallFastest(next);if(overall&&!picked)selected=overall.division;
+    const overall=overallFastest(next);if(overall&&!picked&&!preserveDivision)selected=overall.division;
     feed='ready';
   }catch{feed='error';}
   renderBoard();
 }
-$('retry')?.addEventListener('click',getRuns);
+$('retry')?.addEventListener('click',()=>getRuns(lastSuccess));
+$('refresh-standings').addEventListener('click',()=>getRuns(true));
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&accepted&&lastSuccess)void getRuns(true);
+});
 
 async function getForm(){
   if(readingForm||formReady)return;

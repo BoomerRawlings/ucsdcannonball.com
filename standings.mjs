@@ -1,5 +1,6 @@
 const expectedHeaders = ['Handle', 'Division', 'Elapsed seconds', 'Completed at'];
 export const divisions = ['Human-powered', 'Motorized'];
+const verificationStates = ['Pending verification', 'Verified', 'Verification rejected'];
 const sheetId = '1xPmAk6gjMmRQCYz4c2rI5vJfCpGC3lut24GzumdWsQA';
 const dateFormat = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', year: 'numeric' });
 const clockFormat = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
@@ -26,6 +27,7 @@ export function parseCsv(input) {
 export function readStandings(rows) {
   const [header = [], ...data] = rows;
   if (expectedHeaders.some((name, i) => String(header[i] || '').trim() !== name)) throw new Error('Standings columns unavailable');
+  const hasVerification = String(header[4] || '').trim() === 'Verification';
   const runs = [];
   for (const row of data) {
     const [handle,division,duration,completed] = row.slice(0,4).map(value => String(value ?? '').trim());
@@ -34,7 +36,9 @@ export function readStandings(rows) {
     const seconds=Number(duration);
     if (seconds <= 0 || !Number.isSafeInteger(Math.round(seconds*1000))) continue;
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(completed) || !Number.isFinite(Date.parse(completed))) continue;
-    runs.push({handle,division,seconds,completed});
+    const label = hasVerification ? String(row[4] ?? '').trim() : '';
+    const verification = verificationStates.includes(label) ? label : '';
+    runs.push({handle,division,seconds,completed,verification});
   }
   return runs;
 }
@@ -90,17 +94,30 @@ export function formEmbedUrl(url) {
 }
 
 export async function loadSheet(tab) {
-  const columns = tab==='Standings'?'A,B,C,D':tab==='Config'?'A,B':null;
+  const columns = tab==='Standings'?'A,B,C,D,E':tab==='Config'?'A,B':null;
   if (!columns) throw new Error('Unknown public tab');
-  const query=new URLSearchParams({sheet:tab,headers:'1',tqx:'out:csv',tq:'select '+columns});
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),12000);
-  try {
+  async function request(selectedColumns) {
+    const query=new URLSearchParams({sheet:tab,headers:'1',tqx:'out:csv',tq:'select '+selectedColumns});
     const response=await fetch('https://docs.google.com/spreadsheets/d/'+sheetId+'/gviz/tq?'+query,{
       credentials:'omit', cache:'no-store', referrerPolicy:'no-referrer',signal:controller.signal});
     if (!response.ok || /text\/html/i.test(response.headers.get('content-type')||'')) throw new Error('Public sheet unavailable');
     const body=await response.text();
     if (/^\s*</.test(body)) throw new Error('Unexpected sheet response');
-    return parseCsv(body);
+    let error;
+    try { error=JSON.parse(body); } catch {}
+    return {body,error};
+  }
+  try {
+    let result=await request(columns);
+    const errors=result.error?.errors;
+    // The legacy public sheet has only A:D. Do not downgrade any other error.
+    if(tab==='Standings' && result.error?.status==='error' && errors?.length===1
+      && errors[0].reason==='invalid_query' && errors[0].detailed_message==='Invalid query: NO_COLUMN: E') {
+      result=await request('A,B,C,D');
+    }
+    if(result.error?.status==='error') throw new Error('Public sheet query unavailable');
+    return parseCsv(result.body);
   } finally { clearTimeout(timeout); }
 }

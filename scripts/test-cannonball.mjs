@@ -105,7 +105,7 @@ test('zero and malformed times or unknown divisions cannot establish a record', 
 
 test('every website run contains only approved public result fields', () => {
   const [run] = readStandings([[...standingsHeader, 'Notes', 'Proof URL'], [...runRows[0], 'private notes', 'https://example.com/private']]);
-  assert.deepEqual(run, {handle: '@coast', division: 'Motorized', seconds: 303.08, completed: runRows[0][3]});
+  assert.deepEqual(run, {handle: '@coast', division: 'Motorized', seconds: 303.08, completed: runRows[0][3], verification: ''});
   assert.throws(() => readStandings([['Timestamp', 'Handle', 'Notes', 'Proof URL']]));
 });
 
@@ -115,7 +115,7 @@ test('the browser fetches specific public columns without credentials and refuse
   await loadSheet('Config');
   await assert.rejects(loadSheet('Form Responses 1'));
   assert.equal(fetch.mock.callCount(), 2);
-  for (const [i, tab, columns] of [[0, 'Standings', 'A,B,C,D'], [1, 'Config', 'A,B']]) {
+  for (const [i, tab, columns] of [[0, 'Standings', 'A,B,C,D,E'], [1, 'Config', 'A,B']]) {
     const [target, options] = fetch.mock.calls[i].arguments;
     const url = new URL(target);
     assert.equal(url.origin, 'https://docs.google.com');
@@ -205,7 +205,7 @@ async function mountApp(t, respond) {
     return respond(tab);
   });
   await import('../app.mjs?test=' + ++appLoadCount);
-  return {get, tabs, window, requests};
+  return {get, tabs, window, document, requests};
 }
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const csvResponse = table => new Response(table.map(row => row.join(',')).join('\r\n'));
@@ -219,7 +219,7 @@ test('acceptance loads verified speeds, divisions preserve ranking, and only Sub
   assert.equal(get('form-embed').getAttribute('src'), null);
   assert.equal(get('embedded-entry').hidden, true);
   get('enter').dispatchEvent(new Event('click'));
-  assert.match(get('standings-state').textContent, /^Loading verified runs/);
+  assert.match(get('standings-state').textContent, /^Loading runs/);
   assert.equal(get('record-speed').hidden, true);
   assert.deepEqual(get('standings-body').children, []);
   await settle();
@@ -243,7 +243,6 @@ test('acceptance loads verified speeds, divisions preserve ranking, and only Sub
   assert.deepEqual(rows.map(row => row.children[1].textContent), ['@relay', '@glider', '@coast']);
   assert.deepEqual(rows.map(row => row.children[2].children[1].textContent), ['39.2 mph', '31.2 mph', '12.5 mph']);
   assert.deepEqual(requests, ['Standings']);
-  assert.doesNotMatch(get('opening-post').textContent, /mph|straight.line/i, 'unverified opening time has no speed');
 
   assert.equal(get('form-embed').getAttribute('src'), null, 'the form stays unloaded before Submit');
   location.hash = '#submit';
@@ -267,7 +266,7 @@ test('acceptance loads verified speeds, divisions preserve ranking, and only Sub
   assert.equal(iframe.srcAssignments, 1, 'navigation must not reload the iframe');
 });
 
-test('an empty approved board keeps the empty state and does not infer speed from the pending opening time', async t => {
+test('an empty honor-system board keeps the empty state without inventing a speed', async t => {
   const {get} = await mountApp(t, () => csvResponse([standingsHeader]));
   get('enter').dispatchEvent(new Event('click'));
   await settle();
@@ -275,11 +274,8 @@ test('an empty approved board keeps the empty state and does not infer speed fro
   assert.equal(get('record-speed').hidden, true);
   assert.equal(get('record-speed').textContent, '');
   assert.equal(get('record-handle').textContent, 'First record unclaimed');
-  assert.match(get('standings-state').textContent, /No verified human-powered finishes yet/);
+  assert.match(get('standings-state').textContent, /No human-powered finishes yet/);
   assert.equal(get('retry').hidden, true);
-  assert.equal(get('opening-post').hidden, false);
-  assert.match(get('opening-post').textContent, /pending verification/i);
-  assert.doesNotMatch(get('opening-post').textContent, /mph|straight.line/i);
 });
 
 test('load failure and retry retain their states and show speed only after approved valid results arrive', async t => {
@@ -296,7 +292,7 @@ test('load failure and retry retain their states and show speed only after appro
 
   get('retry').dispatchEvent(new Event('click'));
   assert.deepEqual(requests, ['Standings', 'Standings']);
-  assert.match(get('standings-state').textContent, /^Loading verified runs/);
+  assert.match(get('standings-state').textContent, /^Loading runs/);
   assert.equal(get('record-speed').hidden, true);
   respond(csvResponse([standingsHeader, ...runRows,
     ['@invalid', 'Human-powered', '0', runRows[0][3]],
@@ -411,4 +407,172 @@ test('a failed Config request can retry successfully without duplicate reads or 
   await settle();
   assert.deepEqual(requests, ['Config', 'Standings', 'Config']);
   assert.equal(get('form-embed').srcAssignments, 1);
+});
+
+test('verification accepts the four public states and ignores legacy or unknown fields', () => {
+  const row=['runner','Human-powered','100','2026-11-04T15:15:00Z'];
+  for(const [header,label,expected] of [
+    [standingsHeader,undefined,''], [[...standingsHeader,''],'',''], [[...standingsHeader,''],'Verified',''],
+    [[...standingsHeader,'Notes'],'Verified',''],
+    ...['','Pending verification','Verified','Verification rejected'].map(label=>[[...standingsHeader,'Verification'],label,label]),
+    ...['verified','Approved','<img src=x onerror=alert(1)>','private proof https://example.com/secret'].map(label=>[[...standingsHeader,'Verification'],label,'']),
+  ]) {
+    const [run]=readStandings([header,[...row,label,'private notes','https://example.com/private']]);
+    assert.deepEqual(run,{handle:'runner',division:'Human-powered',seconds:100,completed:row[3],verification:expected});
+  }
+});
+
+test('verification labels do not change ties, personal bests, or division ranking', () => {
+  const runs=readStandings([[...standingsHeader,'Verification'],
+    ['runner','Human-powered','100','2026-11-04T16:00:00Z','Verified'],
+    ['runner','Human-powered','90','2026-11-04T17:00:00Z','Verification rejected'],
+    ['runner','Human-powered','90','2026-11-04T15:00:00Z','Pending verification'],
+    ['other','Human-powered','90','2026-11-04T14:00:00Z',''],
+    ['runner','Motorized','80','2026-11-04T17:00:00Z','Verified'],
+  ]);
+  for(const input of [runs,runs.toReversed()]) {
+    const board=ranked(input,'Human-powered');
+    assert.deepEqual(board.map(run=>[run.handle,run.seconds,run.verification]),[
+      ['other',90,''],['runner',90,'Pending verification'],
+    ]);
+    assert.equal(overallFastest(input).division,'Motorized');
+  }
+});
+
+test('only the exact legacy missing-E query error falls back to the four public columns', async t => {
+  const error={status:'error',errors:[{reason:'invalid_query',message:'INVALID_QUERY',detailed_message:'Invalid query: NO_COLUMN: E'}]};
+  const fetch=t.mock.method(globalThis,'fetch',async target=>new URL(target).searchParams.get('tq')==='select A,B,C,D,E'
+    ? new Response(JSON.stringify(error)) : csvResponse([standingsHeader,...runRows]));
+  const runs=readStandings(await loadSheet('Standings'));
+  assert.equal(runs.length,runRows.length);
+  assert.ok(runs.every(run=>run.verification===''));
+  assert.equal(fetch.mock.callCount(),2);
+  assert.deepEqual(fetch.mock.calls.map(call=>new URL(call.arguments[0]).searchParams.get('tq')),['select A,B,C,D,E','select A,B,C,D']);
+  for(const call of fetch.mock.calls) {
+    assert.equal(new URL(call.arguments[0]).searchParams.get('sheet'),'Standings');
+    assert.equal(call.arguments[1].credentials,'omit');
+    assert.equal(call.arguments[1].referrerPolicy,'no-referrer');
+  }
+});
+
+test('other Google query failures never silently downgrade the public schema', async t => {
+  for(const detail of ['Invalid query: NO_COLUMN: F','Invalid query: NO_COLUMN: D','Permission denied']) await t.test(detail,async t=>{
+    const fetch=t.mock.method(globalThis,'fetch',async()=>new Response(JSON.stringify({status:'error',errors:[{reason:'invalid_query',detailed_message:detail}]})));
+    await assert.rejects(loadSheet('Standings'));
+    assert.equal(fetch.mock.callCount(),1);
+  });
+});
+
+test('each posted verification state has matching record and row text, with a check only for Verified', async t => {
+  for(const verification of ['', 'Pending verification', 'Verified', 'Verification rejected', '<private unknown>']) await t.test(verification || 'no proof',async t=>{
+    const {get}=await mountApp(t,()=>csvResponse([[...standingsHeader,'Verification'],['runner','Human-powered','100','2026-11-04T15:15:00Z',verification]]));
+    get('enter').dispatchEvent(new Event('click'));await settle();
+    const expected=verification==='<private unknown>'?'':verification;
+    const record=get('record-verification'), handleCell=get('standings-body').children[0].children[1];
+    assert.equal(record.hidden,!expected);
+    assert.equal(handleCell.children[0].textContent,'runner');
+    assert.equal(handleCell.children.length,expected?2:1);
+    assert.equal(record.textContent,(expected==='Verified'?'✓':'')+expected);
+    assert.doesNotMatch(handleCell.textContent,/private unknown/);
+    if(expected){
+      const badge=handleCell.children[1];
+      assert.equal(badge.textContent,record.textContent);
+      assert.equal(badge.className.includes('is-verified'),expected==='Verified');
+      if(expected==='Verified') {
+        assert.equal(badge.children[0].textContent,'✓');
+        assert.equal(badge.children[0].getAttribute('aria-hidden'),'true');
+        assert.equal(badge.children[1].textContent,'Verified');
+      }else assert.doesNotMatch(badge.textContent,/✓/);
+    }
+  });
+});
+
+test('refresh preserves the current division, deduplicates requests, and retains last-good verification on failure', async t => {
+  let finish;
+  const {get,requests}=await mountApp(t,()=>new Promise(resolve=>{finish=resolve;}));
+  get('enter').dispatchEvent(new Event('click'));
+  assert.equal(get('refresh-standings').disabled,true);
+  finish(csvResponse([[...standingsHeader,'Verification'],
+    ['motor','Motorized','50','2026-11-04T15:15:00Z',''],['human','Human-powered','100','2026-11-04T15:15:00Z','Verified']]));
+  await settle();
+  assert.equal(get('record-handle').textContent,'motor');
+  assert.equal(get('refresh-standings').disabled,false);
+  get('refresh-standings').dispatchEvent(new Event('click'));
+  get('refresh-standings').dispatchEvent(new Event('click'));
+  assert.deepEqual(requests,['Standings','Standings']);
+  assert.equal(get('record-handle').textContent,'motor');
+  finish(csvResponse([[...standingsHeader,'Verification'],
+    ['motor','Motorized','50','2026-11-04T15:15:00Z','Pending verification'],['human','Human-powered','30','2026-11-04T15:15:00Z','Verified']]));
+  await settle();
+  assert.equal(get('record-handle').textContent,'motor','a faster other division must not take over on refresh');
+  assert.equal(get('record-verification').textContent,'Pending verification');
+  get('refresh-standings').dispatchEvent(new Event('click'));
+  finish(new Response('Unavailable',{status:503}));await settle();
+  assert.match(get('standings-state').textContent,/last loaded results/);
+  assert.equal(get('record-handle').textContent,'motor');
+  assert.equal(get('record-verification').textContent,'Pending verification');
+  assert.equal(get('refresh-standings').disabled,false);
+  assert.equal(get('retry').hidden,false);
+  get('retry').dispatchEvent(new Event('click'));
+  finish(csvResponse([[...standingsHeader,'Verification'],['motor','Motorized','50','2026-11-04T15:15:00Z','Verification rejected']]));await settle();
+  assert.equal(get('record-verification').textContent,'Verification rejected');
+  assert.equal(get('retry').hidden,true);
+});
+
+test('returning to a visible page refreshes loaded results while keeping the chosen division', async t => {
+  let finish;
+  const {get,tabs,document,requests}=await mountApp(t,()=>new Promise(resolve=>{finish=resolve;}));
+  document.visibilityState='visible';document.dispatchEvent(new Event('visibilitychange'));
+  assert.deepEqual(requests,[]);
+  get('enter').dispatchEvent(new Event('click'));
+  finish(csvResponse([[...standingsHeader,'Verification'],
+    ['motor','Motorized','50','2026-11-04T15:15:00Z',''],['human','Human-powered','100','2026-11-04T15:15:00Z','Pending verification']]));await settle();
+  tabs.find(tab=>tab.dataset.division==='Human-powered').dispatchEvent(new Event('click'));
+  document.visibilityState='hidden';document.dispatchEvent(new Event('visibilitychange'));
+  assert.equal(requests.length,1);
+  document.visibilityState='visible';document.dispatchEvent(new Event('visibilitychange'));
+  document.dispatchEvent(new Event('visibilitychange'));
+  assert.equal(requests.length,2);
+  finish(csvResponse([[...standingsHeader,'Verification'],
+    ['motor','Motorized','10','2026-11-04T15:15:00Z',''],['human','Human-powered','100','2026-11-04T15:15:00Z','Verified']]));await settle();
+  assert.equal(get('record-handle').textContent,'human');
+  assert.equal(get('record-verification').textContent,'✓Verified');
+});
+
+test('refresh removes an earlier verification check when the public status becomes blank', async t => {
+  let verification='Verified';
+  const {get}=await mountApp(t,()=>csvResponse([[...standingsHeader,'Verification'],['runner','Human-powered','100','2026-11-04T15:15:00Z',verification]]));
+  get('enter').dispatchEvent(new Event('click'));await settle();
+  assert.equal(get('record-verification').textContent,'✓Verified');
+  verification='';
+  get('refresh-standings').dispatchEvent(new Event('click'));await settle();
+  assert.equal(get('record-verification').hidden,true);
+  assert.equal(get('record-verification').textContent,'');
+  const handleCell=get('standings-body').children[0].children[1];
+  assert.equal(handleCell.children.length,1);
+  assert.equal(handleCell.textContent,'runner');
+});
+
+test('a faster unverified personal best never inherits a slower run verification check', async t => {
+  const input=[[...standingsHeader,'Verification'],
+    ['runner','Human-powered','100','2026-11-04T15:15:00Z','Verified'],
+    ['runner','Human-powered','80','2026-11-05T15:15:00Z',''],
+  ];
+  const runs=readStandings(input);
+  for(const order of [runs,runs.toReversed()]) {
+    const board=ranked(order,'Human-powered');
+    assert.equal(board.length,1);
+    assert.equal(board[0].seconds,80);
+    assert.equal(board[0].verification,'');
+    assert.equal(overallFastest(order).verification,'');
+  }
+  const {get}=await mountApp(t,()=>csvResponse(input));
+  get('enter').dispatchEvent(new Event('click'));await settle();
+  assert.equal(get('record-time').textContent,'1:20.00');
+  assert.equal(get('record-verification').hidden,true);
+  assert.equal(get('record-verification').textContent,'');
+  const rows=get('standings-body').children;
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].children[1].children.length,1);
+  assert.equal(rows[0].children[1].textContent,'runner');
 });

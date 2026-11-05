@@ -42,12 +42,40 @@ a forward link to this domain. This site has no return link to the personal site
 
 ## Google integration and privacy
 
-The existing public Google spreadsheet remains the source for approved standings
-and the submission form URL. `standings.mjs` reads only the `Standings` and `Config`
-tabs, without credentials. The site's submission link is loaded from `FormURL` in
-`Config`; the form and its review workflow do not require migration.
+The leaderboard uses an honor system: valid submissions publish automatically.
+Proof is optional. Runs submitted without proof have no verification label;
+submitted proof starts as `Pending verification`. Reviewers can mark a run
+`Verified` or `Verification rejected`. Only `Verified` displays a check.
+Verification belongs to an individual run, so a faster personal best does not
+inherit the status of an older run by the same handle.
 
-Never publish the raw submissions/review spreadsheet, GPS evidence, optional
-notes, credentials, or other private data. The public board contains only handle,
-division, elapsed time, and completion timestamp. Keep form and spreadsheet
-permissions unchanged when deploying this site.
+The public Google spreadsheet supplies standings and the respondent form URL.
+`standings.mjs` reads only `Standings` A:E and `Config` A:B, without credentials.
+The exact `Standings` column order is:
+
+| Column | Header | Public value |
+| --- | --- | --- |
+| A | Handle | Rider's public handle |
+| B | Division | `Human-powered` or `Motorized` |
+| C | Elapsed seconds | Positive elapsed time in seconds |
+| D | Completed at | ISO completion timestamp with UTC offset |
+| E | Verification | Blank, `Pending verification`, `Verified`, or `Verification rejected` |
+
+The frontend derives straight-line average speed from elapsed seconds and the
+1.05-mile crow-flies distance; it does not add a stored speed column. Ranking
+still uses elapsed time, completion timestamp, and handle, with one personal best
+per handle and division, regardless of verification status. Unknown status values
+are not displayed. During rollout, the reader also accepts legacy four-column
+results and a blank fifth header. It retries A:D only for Google's exact missing-E
+column error.
+
+The `FormURL` row in `Config` supplies the form's respondent URL. The site embeds
+the existing Google Form and keeps an external fallback link. Google handles form
+submission; the private validation/review workflow decides which valid fields
+reach the public standings. Review decisions change verification labels without
+publishing proof or notes.
+
+Never publish the raw submissions/review spreadsheet, proof links or contents,
+optional notes, credentials, or other private data. Only the five public fields
+above and frontend-derived display values belong on the board. Keep form and
+spreadsheet permissions unchanged when deploying this site.

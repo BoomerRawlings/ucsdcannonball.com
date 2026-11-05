@@ -74,7 +74,7 @@ test('leaderboard explains the straight-line average beside the existing elapsed
   assert.match(text(headers[2]), /Elapsed[\s\S]*Straight-line avg\./i);
   const recordSpeed = nodes.find(node => attr(node, 'id') === 'record-speed');
   assert.ok(recordSpeed);
-  assert.notEqual(attr(recordSpeed, 'hidden'), undefined, 'no speed appears before a verified record loads');
+  assert.notEqual(attr(recordSpeed, 'hidden'), undefined, 'no speed appears before a record loads');
 });
 
 test('social previews use the canonical identity and an opaque image with matching dimensions', async () => {
@@ -131,4 +131,24 @@ test('the embedded respondent form stays unloaded initially and keeps an accessi
   assert.deepEqual(directives.get('script-src'), ["'self'"]);
   assert.deepEqual(directives.get('form-action'), ["'none'"]);
   assert.deepEqual(directives.get('object-src'), ["'none'"]);
+});
+
+test('honor-system copy makes proof optional without implying every posted run is verified', () => {
+  const text=node=>(node.value || '')+(node.childNodes || []).map(text).join('');
+  const copy=text(nodes.find(node=>node.tagName==='body'));
+  assert.match(copy,/Valid submissions post automatically/);
+  assert.match(copy,/Proof is optional/);
+  assert.match(copy,/GPS activity, video, or other timing-evidence link/);
+  assert.doesNotMatch(copy,/verified runs|only after verification|Start Strava|Send a GPS link|No verified/i);
+  assert.ok(!nodes.some(node=>attr(node,'id')==='opening-post'));
+  assert.ok(!nodes.some(node=>(attr(node,'class') || '').split(' ').includes('record-checks')));
+  const refresh=nodes.find(node=>attr(node,'id')==='refresh-standings');
+  assert.equal(refresh.tagName,'button');
+  assert.equal(attr(refresh,'type'),'button');
+  assert.equal(attr(refresh,'hidden'),undefined);
+  assert.match(text(refresh),/Refresh standings/);
+  const table=nodes.find(node=>node.tagName==='table');
+  assert.match(attr(table,'aria-describedby'),/verification-note/);
+  const recordStatus=nodes.find(node=>attr(node,'id')==='record-verification');
+  assert.notEqual(attr(recordStatus,'hidden'),undefined);
 });
