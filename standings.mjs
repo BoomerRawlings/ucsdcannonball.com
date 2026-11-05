@@ -61,6 +61,17 @@ export function formatTime(seconds) {
   return Math.floor(millis/60000)+':'+String(Math.floor(millis/1000)%60).padStart(2,'0')+'.'+(millis%10 ? fraction : fraction.slice(0,2));
 }
 
+// Equivalent speed over the course's 1.05-mile crow-flies distance.
+export function straightLineMph(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  const mph = 1.05 * 3600 / seconds;
+  return Number.isFinite(mph) ? mph : null;
+}
+export function formatSpeed(seconds) {
+  const mph = straightLineMph(seconds);
+  return mph === null ? '—' : mph.toFixed(1) + ' mph';
+}
+
 export function readFormUrl(rows) {
   const raw=rows.find(row=>String(row[0]).trim()==='FormURL')?.[1];
   if (!raw) return null;

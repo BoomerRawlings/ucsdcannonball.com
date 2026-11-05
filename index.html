@@ -10,7 +10,7 @@
   <meta name="description" content="The independent UCSD Cannonball campus time trial. See verified runs from North Point to Gilman Gateway, read the rules, and submit a time.">
   <link rel="canonical" href="https://ucsdcannonball.com/">
   <title>UCSD Cannonball — Campus Time Trial</title>
-  <link rel="stylesheet" href="./cannonball.css?v=course-3">
+  <link rel="stylesheet" href="./cannonball.css?v=course-4">
   <script type="module" src="./app.mjs"></script>
 </head>
 <body>
@@ -51,14 +51,15 @@
       </div>
       <section class="record" id="verified-record" aria-labelledby="record-label"><div class="record-portrait" aria-hidden="true"></div><div class="record-copy">
         <h2 class="eyebrow" id="record-label">Fastest verified run</h2>
-        <p id="record-time" class="record-time">—</p><p id="record-handle" class="record-handle"></p><p id="record-completed" class="record-completed"><span id="record-date"></span><span id="record-clock"></span></p>
+        <p id="record-time" class="record-time">—</p><p id="record-speed" class="record-speed" hidden></p><p id="record-handle" class="record-handle"></p><p id="record-completed" class="record-completed"><span id="record-date"></span><span id="record-clock"></span></p>
       </div><span aria-hidden="true" class="record-checks"></span></section>
       <aside id="opening-post" class="opening-post" aria-label="First time submitted">
         <div><p class="eyebrow">First time submitted</p><strong id="opening-handle">boomer</strong></div>
         <div><b>4:16:43</b><small>Self-reported · pending verification</small></div>
       </aside>
       <div class="section-line"><h2>Standings</h2><span class="eyebrow muted">Pacific time</span></div>
-      <div class="table-frame"><table><caption class="sr-only">Verified runs in this division, ordered by elapsed time</caption><thead><tr><th scope="col">Rank</th><th scope="col">Handle</th><th scope="col">Elapsed</th><th scope="col">Completed</th></tr></thead><tbody id="standings-body"></tbody></table>
+      <p id="speed-note" class="speed-note">Straight-line average speed uses the 1.05-mile crow-flies distance divided by elapsed time, not actual route distance.</p>
+      <div class="table-frame"><table aria-describedby="speed-note"><caption class="sr-only">Verified runs in this division, ordered by elapsed time</caption><thead><tr><th scope="col">Rank</th><th scope="col">Handle</th><th scope="col">Elapsed<span class="speed-label">Straight-line avg.</span></th><th scope="col">Completed</th></tr></thead><tbody id="standings-body"></tbody></table>
         <div class="board-status"><p id="standings-state" role="status" aria-live="polite">Loading verified runs…</p><button type="button" class="text-button" id="retry" hidden>Retry standings <span aria-hidden="true">↻</span></button></div>
       </div>
       <a id="public-sheet" class="inline-link sheet-link" href="https://docs.google.com/spreadsheets/d/1xPmAk6gjMmRQCYz4c2rI5vJfCpGC3lut24GzumdWsQA/edit" hidden>View public sheet <span aria-hidden="true">↗</span></a>
@@ -74,7 +75,7 @@
           <li><strong>Send in your time.</strong><p>Enter your handle, elapsed time, and the date and time you finished in San Diego. If you used motor power at any point, pick Motorized. Otherwise, pick Human-powered.</p></li>
         </ol>
         <a class="inline-link" href="#about">See course coordinates and rules <span aria-hidden="true">→</span></a>
-      </article><aside class="paper-panel"><p class="eyebrow">Submission privacy</p><h2>Who sees my route?</h2><p>Send a GPS link the reviewer can open. Your route and optional notes stay private here. The board shows your handle, division, elapsed time, and when you finished.</p><p>Keep the link working until your time is verified. Then you can delete the GPS recording or turn off link sharing.</p><div class="form-area"><p id="form-state" role="status">Checking submission availability…</p><button id="form-retry" type="button" class="text-button" hidden>Check again <span aria-hidden="true">↻</span></button><a id="form-link" class="action" hidden>Continue to Google Form <span aria-hidden="true">↗</span></a></div></aside></div>
+      </article><aside class="paper-panel"><p class="eyebrow">Submission privacy</p><h2>Who sees my route?</h2><p>Send a GPS link the reviewer can open. Your route and optional notes stay private here. The board shows your handle, division, elapsed time, straight-line average speed, and when you finished.</p><p>Keep the link working until your time is verified. Then you can delete the GPS recording or turn off link sharing.</p><div class="form-area"><p id="form-state" role="status">Checking submission availability…</p><button id="form-retry" type="button" class="text-button" hidden>Check again <span aria-hidden="true">↻</span></button><a id="form-link" class="action" hidden>Continue to Google Form <span aria-hidden="true">↗</span></a></div></aside></div>
     </section>
 
     <section id="about" class="view" aria-labelledby="about-heading" hidden>

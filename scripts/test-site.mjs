@@ -58,3 +58,21 @@ test('HTML, responsive images, fonts, styles, and module imports resolve at the 
     }
   }
 });
+
+test('leaderboard explains the straight-line average beside the existing elapsed column', () => {
+  const text = node => (node.value || '') + (node.childNodes || []).map(text).join('');
+  const table = nodes.find(node => node.tagName === 'table');
+  const note = nodes.find(node => attr(node, 'id') === 'speed-note');
+  assert.ok(note, 'the speed calculation must have a visible explanation');
+  assert.ok((attr(table, 'aria-describedby') || '').split(/\s+/).includes('speed-note'));
+  assert.equal(attr(note, 'hidden'), undefined);
+  assert.match(text(note), /1\.05.mile/i);
+  assert.match(text(note), /crow.flies/i);
+  assert.match(text(note), /not (?:the )?actual route distance/i);
+  const headers = nodes.filter(node => node.tagName === 'th' && attr(node, 'scope') === 'col');
+  assert.equal(headers.length, 4);
+  assert.match(text(headers[2]), /Elapsed[\s\S]*Straight-line avg\./i);
+  const recordSpeed = nodes.find(node => attr(node, 'id') === 'record-speed');
+  assert.ok(recordSpeed);
+  assert.notEqual(attr(recordSpeed, 'hidden'), undefined, 'no speed appears before a verified record loads');
+});

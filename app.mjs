@@ -1,4 +1,4 @@
-import {divisions, ranked, overallFastest, readStandings, loadSheet, formatTime, pacificStamp, readFormUrl} from './standings.mjs';
+import {divisions, ranked, overallFastest, readStandings, loadSheet, formatTime, formatSpeed, pacificStamp, readFormUrl} from './standings.mjs';
 
 const $=id=>document.getElementById(id);
 const tabs=[...document.querySelectorAll('[data-division]')];
@@ -102,6 +102,8 @@ function renderBoard(){
   if($('record-date')&&$('record-clock')){say('record-date',stamp.date);say('record-clock',stamp.time);}
   else say('record-completed',leader?stamp.date+' · '+stamp.time:'');
   hidden($('record-completed'),!leader);
+  say('record-speed',leader?'Straight-line avg. '+formatSpeed(leader.seconds):'');
+  hidden($('record-speed'),!leader);
   const body=$('standings-body');body.replaceChildren();
   let rank=0;
   for(const [i,run] of board.entries()){
@@ -110,7 +112,12 @@ function renderBoard(){
     for(const [j,content] of [String(rank).padStart(2,'0'),run.handle,formatTime(run.seconds),stamp.date+' · '+stamp.time].entries()){
       const cell=document.createElement(j===1?'th':'td');
       if(j===1)cell.scope='row';
-      cell.textContent=content;tr.append(cell);
+      if(j===2){
+        const elapsed=document.createElement('span'), speed=document.createElement('span');
+        elapsed.textContent=content;speed.textContent=formatSpeed(run.seconds);speed.className='run-speed';
+        cell.append(elapsed);cell.append(speed);
+      }else cell.textContent=content;
+      tr.append(cell);
     }
     body.append(tr);
   }

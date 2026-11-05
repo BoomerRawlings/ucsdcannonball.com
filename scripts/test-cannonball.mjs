@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { parse } from 'parse5';
-import { formatTime, loadSheet, overallFastest, pacificStamp, parseCsv, ranked, readFormUrl, readStandings } from '../standings.mjs';
+import { formatSpeed, formatTime, loadSheet, overallFastest, pacificStamp, parseCsv, ranked, readFormUrl, readStandings, straightLineMph } from '../standings.mjs';
 
 const standingsHeader = ['Handle', 'Division', 'Elapsed seconds', 'Completed at'];
 const runRows = [
@@ -75,6 +75,22 @@ test('Pacific completion dates cross UTC midnight and adjust for daylight saving
   assert.equal(readStandings([standingsHeader, ['runner', 'Human-powered', '256.043', '2026-11-04T15:15:00Z']])[0].seconds, 256.043);
 });
 
+test('straight-line speed uses the full elapsed precision and rounds only the displayed mph', () => {
+  assert.equal(straightLineMph(378), 10);
+  assert.equal(straightLineMph(3600), 1.05);
+  assert.equal(straightLineMph(256.043), 14.763145252945794);
+  assert.equal(formatSpeed(378), '10.0 mph');
+  assert.equal(formatSpeed(89.17), '42.4 mph');
+  assert.equal(formatSpeed(256.043), '14.8 mph');
+});
+
+test('missing, invalid, zero, or overflowing durations never display a speed', () => {
+  for (const seconds of [undefined, null, '', '3600', 0, -1, NaN, Infinity, -Infinity, Number.MIN_VALUE]) {
+    assert.equal(straightLineMph(seconds), null, String(seconds));
+    assert.equal(formatSpeed(seconds), '\u2014', String(seconds));
+  }
+});
+
 test('zero and malformed times or unknown divisions cannot establish a record', () => {
   const date = runRows[0][3];
   const bogus = [
@@ -127,14 +143,18 @@ test('submission handoff uses a responder URL from the designated config row', (
   assert.ok(!readFormUrl([['Key', 'Value'], ['OtherKey', form]]));
 });
 
-test('acceptance loads the record, division buttons switch it, and only Submit requests the form', async t => {
+let appLoadCount = 0;
+async function mountApp(t, respond) {
   class Element extends EventTarget {
     attrs = new Map();
     children = [];
+    ownText = '';
     classList = {toggle() {}};
     dataset = {};
-    append(child) { this.children.push(child); }
-    replaceChildren(...children) { this.children = children; }
+    get textContent() { return this.ownText + this.children.map(child => child.textContent).join(''); }
+    set textContent(value) { this.ownText = String(value); this.children = []; }
+    append(...children) { this.children.push(...children); }
+    replaceChildren(...children) { this.ownText = ''; this.children = children; }
     setAttribute(name, value) { this.attrs.set(name, value); }
     removeAttribute(name) { this.attrs.delete(name); }
     querySelector() { return null; }
@@ -144,9 +164,11 @@ test('acceptance loads the record, division buttons switch it, and only Submit r
   function mount(node) {
     const element = new Element(), id = attribute(node, 'id'), division = attribute(node, 'data-division');
     element.hidden = attribute(node, 'hidden') !== undefined;
+    if (node.value) element.textContent = node.value;
     if (id) byId.set(id, element);
     if (division) { element.dataset.division = division; tabs.push(element); }
-    node.childNodes?.forEach(mount);
+    for (const child of node.childNodes || []) element.append(mount(child));
+    return element;
   }
   mount(parse(html));
   const get = id => byId.get(id);
@@ -157,31 +179,50 @@ test('acceptance loads the record, division buttons switch it, and only Submit r
   });
   Object.assign(globalThis, {window, document, location: {hash: ''}});
   t.after(() => { delete globalThis.window; delete globalThis.document; delete globalThis.location; });
-
-  const requests = [], form = 'https://docs.google.com/forms/d/e/example/viewform';
+  const requests = [];
   t.mock.method(globalThis, 'fetch', async target => {
     const tab = new URL(target).searchParams.get('sheet');
     requests.push(tab);
-    const table = tab === 'Config' ? [['Key', 'Value'], ['FormURL', form]] : [standingsHeader, ...runRows];
-    return new Response(table.map(row => row.join(',')).join('\r\n'));
+    return respond(tab);
   });
-  const settle = () => new Promise(resolve => setImmediate(resolve));
-  await import('../app.mjs');
+  await import('../app.mjs?test=' + ++appLoadCount);
+  return {get, tabs, window, requests};
+}
+const settle = () => new Promise(resolve => setImmediate(resolve));
+const csvResponse = table => new Response(table.map(row => row.join(',')).join('\r\n'));
+
+test('acceptance loads verified speeds, divisions preserve ranking, and only Submit requests the form', async t => {
+  const form = 'https://docs.google.com/forms/d/e/example/viewform';
+  const {get, tabs, window, requests} = await mountApp(t, tab => csvResponse(tab === 'Config'
+    ? [['Key', 'Value'], ['FormURL', form]] : [standingsHeader, ...runRows]));
   assert.deepEqual(requests, []);
   assert.equal(get('app').hidden, true);
   get('enter').dispatchEvent(new Event('click'));
+  assert.match(get('standings-state').textContent, /^Loading verified runs/);
+  assert.equal(get('record-speed').hidden, true);
+  assert.deepEqual(get('standings-body').children, []);
   await settle();
   assert.deepEqual(requests, ['Standings']);
   assert.equal(get('gate').hidden, true);
   assert.equal(get('leaderboard').hidden, false);
   assert.equal(get('record-handle').textContent, '@glider');
   assert.equal(get('record-time').textContent, '1:29.17');
+  assert.equal(get('record-speed').textContent, 'Straight-line avg. 42.4 mph');
+  assert.equal(get('record-speed').hidden, false);
   assert.match(get('record-clock').textContent, /11:05\s*PM/i);
+  const [humanRow] = get('standings-body').children;
+  assert.equal(humanRow.children.length, 4, 'the existing four-column table remains intact');
+  assert.deepEqual(humanRow.children[2].children.map(span => span.textContent), ['1:29.17', '42.4 mph']);
+  assert.equal(humanRow.children[2].children[1].className, 'run-speed');
 
   tabs.find(tab => tab.dataset.division === 'Motorized').dispatchEvent(new Event('click'));
   assert.equal(get('record-handle').textContent, '@relay');
-  assert.deepEqual(get('standings-body').children.map(row => row.children[1].textContent), ['@relay', '@glider', '@coast']);
+  assert.equal(get('record-speed').textContent, 'Straight-line avg. 39.2 mph');
+  const rows = get('standings-body').children;
+  assert.deepEqual(rows.map(row => row.children[1].textContent), ['@relay', '@glider', '@coast']);
+  assert.deepEqual(rows.map(row => row.children[2].children[1].textContent), ['39.2 mph', '31.2 mph', '12.5 mph']);
   assert.deepEqual(requests, ['Standings']);
+  assert.doesNotMatch(get('opening-post').textContent, /mph|straight.line/i, 'unverified opening time has no speed');
 
   location.hash = '#submit';
   window.dispatchEvent(new Event('hashchange'));
@@ -190,4 +231,47 @@ test('acceptance loads the record, division buttons switch it, and only Submit r
   assert.equal(get('submit').hidden, false);
   assert.equal(get('form-link').hidden, false);
   assert.equal(get('form-link').href, form);
+});
+
+test('an empty approved board keeps the empty state and does not infer speed from the pending opening time', async t => {
+  const {get} = await mountApp(t, () => csvResponse([standingsHeader]));
+  get('enter').dispatchEvent(new Event('click'));
+  await settle();
+  assert.deepEqual(get('standings-body').children, []);
+  assert.equal(get('record-speed').hidden, true);
+  assert.equal(get('record-speed').textContent, '');
+  assert.equal(get('record-handle').textContent, 'First record unclaimed');
+  assert.match(get('standings-state').textContent, /No verified human-powered finishes yet/);
+  assert.equal(get('retry').hidden, true);
+  assert.equal(get('opening-post').hidden, false);
+  assert.match(get('opening-post').textContent, /pending verification/i);
+  assert.doesNotMatch(get('opening-post').textContent, /mph|straight.line/i);
+});
+
+test('load failure and retry retain their states and show speed only after approved valid results arrive', async t => {
+  let respond;
+  const {get, requests} = await mountApp(t, () => new Promise(resolve => { respond = resolve; }));
+  get('enter').dispatchEvent(new Event('click'));
+  respond(new Response('Unavailable', {status: 503}));
+  await settle();
+  assert.match(get('standings-state').textContent, /live results sheet is unavailable/i);
+  assert.equal(get('record-handle').textContent, 'Live times unavailable');
+  assert.equal(get('record-speed').hidden, true);
+  assert.deepEqual(get('standings-body').children, []);
+  assert.equal(get('retry').hidden, false);
+
+  get('retry').dispatchEvent(new Event('click'));
+  assert.deepEqual(requests, ['Standings', 'Standings']);
+  assert.match(get('standings-state').textContent, /^Loading verified runs/);
+  assert.equal(get('record-speed').hidden, true);
+  respond(csvResponse([standingsHeader, ...runRows,
+    ['@invalid', 'Human-powered', '0', runRows[0][3]],
+    ['@missing', 'Motorized', '', runRows[0][3]],
+  ]));
+  await settle();
+  assert.equal(get('record-speed').textContent, 'Straight-line avg. 42.4 mph');
+  assert.equal(get('record-speed').hidden, false);
+  assert.equal(get('retry').hidden, true);
+  assert.equal(get('standings-state').hidden, true);
+  assert.deepEqual(get('standings-body').children.map(row => row.children[1].textContent), ['@glider']);
 });
